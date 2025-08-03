@@ -511,10 +511,9 @@
             if (isPlayerTurn) {
                 startPlayerTimer();
             } else {
-                setTimeout(() => {
-                    startAITimer();
-                    makeAIMove();
-                }, 500); // Small delay for better UX
+                // Start AI timer and make AI move after a short delay
+                startAITimer();
+                setTimeout(makeAIMove, 500);
             }
         }
         
@@ -523,14 +522,15 @@
             if (!gameActive || isPlayerTurn) return;
             
             let move;
+            const moves = game.moves({verbose: true});
+            
+            if (moves.length === 0) return;
             
             if (difficulty === 'easy') {
                 // Easy: Random move
-                const moves = game.moves();
-                move = moves[Math.floor(Math.random() * moves.length)];
+                move = moves[Math.floor(Math.random() * moves.length)].san;
             } else if (difficulty === 'medium') {
                 // Medium: Prefer captures and safe moves
-                const moves = game.moves({verbose: true});
                 
                 // Find captures first
                 const captures = moves.filter(m => m.captured);
@@ -574,6 +574,7 @@
                 
                 // Switch back to player
                 isPlayerTurn = true;
+                stopAITimer();
                 startPlayerTimer();
             }
         }
@@ -786,16 +787,14 @@
             } else if (playerWon) {
                 // Player won on time
                 modalTitle.textContent = "Victory!";
-                modalMessage.textContent = "🎉 You won and earned 520 ORANGES! �";
+                modalMessage.textContent = "🎉 You won and earned 520 ORANGES! 🍊";
             } else {
                 // AI won on time
                 modalTitle.textContent = "Game Over";
                 modalMessage.textContent = "Time's up! Try again and claim those ORANGES!";
             }
             
-            if (playerWon !== null) {
-                gameOverModal.classList.add('active');
-            }
+            gameOverModal.classList.add('active');
         }
         
         function returnToMenu() {
@@ -828,7 +827,7 @@
         shareBtn.addEventListener('click', () => {
             let text;
             if (modalTitle.textContent.includes("Victory")) {
-                text = "I just won in siCHESS and earned 520 ORANGES! � #siCHESS";
+                text = "I just won in siCHESS and earned 520 ORANGES! 🍊 #siCHESS";
             } else {
                 text = "siCHESS beat me, but I'll be back! 🍊 #siCHESS";
             }
