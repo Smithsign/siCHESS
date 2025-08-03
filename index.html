@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>siCHESS - Orange Themed Chess</title>
+    <title>siCHESS - Practice Mode</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.2/chess.js"></script>
     <style>
         :root {
@@ -48,34 +48,6 @@
             flex-direction: column;
             align-items: center;
             gap: 20px;
-        }
-        
-        .difficulty-selector {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        
-        .difficulty-btn {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 25px;
-            background: linear-gradient(to right, var(--orange-light), var(--orange-med));
-            color: white;
-            font-weight: bold;
-            cursor: pointer;
-            box-shadow: 0 4px 8px rgba(255, 140, 0, 0.2);
-            transition: all 0.3s;
-        }
-        
-        .difficulty-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 12px rgba(255, 140, 0, 0.3);
-        }
-        
-        .difficulty-btn.active {
-            background: linear-gradient(to right, var(--orange-med), var(--orange-dark));
-            box-shadow: 0 4px 8px rgba(255, 107, 0, 0.3);
         }
         
         .start-btn {
@@ -187,6 +159,13 @@
             animation: pulse 1s infinite;
         }
         
+        .current-turn {
+            font-size: 1.2rem;
+            font-weight: bold;
+            color: var(--orange-dark);
+            margin-bottom: 10px;
+        }
+        
         @keyframes pulse {
             0% { background: linear-gradient(to right, var(--orange-light), var(--orange-med)); }
             50% { background: linear-gradient(to right, #ff5e5e, #ff0000); }
@@ -271,15 +250,6 @@
         }
         
         @media (max-width: 600px) {
-            .difficulty-selector {
-                flex-direction: column;
-                width: 100%;
-            }
-            
-            .difficulty-btn {
-                width: 100%;
-            }
-            
             .timer-container {
                 flex-direction: column;
                 gap: 10px;
@@ -295,24 +265,21 @@
 <body>
     <div class="game-container">
         <h1>siCHESS 🍊</h1>
+        <h2>Practice Mode</h2>
         
         <div class="menu-screen" id="menu-screen">
-            <h2>Select Difficulty</h2>
-            <div class="difficulty-selector">
-                <button class="difficulty-btn" data-difficulty="easy">Easy</button>
-                <button class="difficulty-btn" data-difficulty="medium">Medium</button>
-                <button class="difficulty-btn" data-difficulty="extreme">Extreme</button>
-            </div>
-            <button class="start-btn" id="start-btn">Start Game</button>
+            <button class="start-btn" id="start-btn">Start Practice</button>
         </div>
+        
+        <div class="current-turn" id="current-turn" style="display: none;">White's Turn</div>
         
         <div class="board-container" id="board-container">
             <div id="board"></div>
         </div>
         
         <div class="timer-container" id="timer-container">
-            <div class="timer" id="player-timer">5:00</div>
-            <div class="timer" id="ai-timer">5:00</div>
+            <div class="timer" id="white-timer">5:00</div>
+            <div class="timer" id="black-timer">5:00</div>
         </div>
     </div>
     
@@ -332,23 +299,21 @@
         let game = new Chess();
         let selectedSquare = null;
         let validMoves = [];
-        let difficulty = 'medium';
-        let playerTime = 5 * 60;
-        let aiTime = 5 * 60;
-        let playerTimerInterval = null;
-        let aiTimerInterval = null;
-        let isPlayerTurn = true;
+        let whiteTime = 5 * 60;
+        let blackTime = 5 * 60;
+        let whiteTimerInterval = null;
+        let blackTimerInterval = null;
         let gameActive = false;
         
         // DOM elements
         const boardElement = document.getElementById('board');
-        const playerTimerElement = document.getElementById('player-timer');
-        const aiTimerElement = document.getElementById('ai-timer');
-        const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+        const whiteTimerElement = document.getElementById('white-timer');
+        const blackTimerElement = document.getElementById('black-timer');
         const startBtn = document.getElementById('start-btn');
         const menuScreen = document.getElementById('menu-screen');
         const boardContainer = document.getElementById('board-container');
         const timerContainer = document.getElementById('timer-container');
+        const currentTurnElement = document.getElementById('current-turn');
         const gameOverModal = document.getElementById('game-over-modal');
         const modalTitle = document.getElementById('modal-title');
         const modalMessage = document.getElementById('modal-message');
@@ -378,21 +343,25 @@
         
         // Update the board display
         function updateBoard() {
+            // Clear previous highlights and valid moves
             document.querySelectorAll('.selected, .valid-move, .capture-move').forEach(el => {
                 el.classList.remove('selected', 'valid-move', 'capture-move');
                 const moveIndicator = el.querySelector('.valid-move, .capture-move');
                 if (moveIndicator) el.removeChild(moveIndicator);
             });
             
+            // Update pieces
             for (let i = 0; i < 8; i++) {
                 for (let j = 0; j < 8; j++) {
                     const squareNotation = `${String.fromCharCode(97 + j)}${8 - i}`;
                     const piece = game.get(squareNotation);
                     const squareElement = document.querySelector(`[data-square="${squareNotation}"]`);
                     
+                    // Clear previous piece
                     const existingPiece = squareElement.querySelector('.piece');
                     if (existingPiece) squareElement.removeChild(existingPiece);
                     
+                    // Add new piece if present
                     if (piece) {
                         const pieceElement = document.createElement('div');
                         pieceElement.className = 'piece';
@@ -402,6 +371,7 @@
                 }
             }
             
+            // Highlight selected square and valid moves
             if (selectedSquare) {
                 const squareElement = document.querySelector(`[data-square="${selectedSquare}"]`);
                 if (squareElement) {
@@ -419,23 +389,32 @@
                     });
                 }
             }
+            
+            // Update turn indicator
+            currentTurnElement.textContent = game.turn() === 'w' ? "White's Turn" : "Black's Turn";
         }
         
         // Handle square clicks
         function handleSquareClick(squareElement) {
-            if (!gameActive || !isPlayerTurn) return;
+            if (!gameActive) return;
             
             const square = squareElement.dataset.square;
             const piece = game.get(square);
             
-            if (!selectedSquare && piece && piece.color === 'w') {
+            // If no square is selected and the clicked square has a piece of the current turn's color, select it
+            if (!selectedSquare && piece && piece.color === game.turn()) {
                 selectedSquare = square;
-                validMoves = game.moves({square: square, verbose: true});
+                validMoves = game.moves({
+                    square: square,
+                    verbose: true
+                });
                 updateBoard();
                 return;
             }
             
+            // If a square is already selected
             if (selectedSquare) {
+                // If clicking on the same square, deselect it
                 if (square === selectedSquare) {
                     selectedSquare = null;
                     validMoves = [];
@@ -443,266 +422,189 @@
                     return;
                 }
                 
-                if (piece && piece.color === 'w') {
+                // If clicking on another piece of the same color, select that piece instead
+                if (piece && piece.color === game.turn()) {
                     selectedSquare = square;
-                    validMoves = game.moves({square: square, verbose: true});
+                    validMoves = game.moves({
+                        square: square,
+                        verbose: true
+                    });
                     updateBoard();
                     return;
                 }
                 
+                // Check if the move is valid
                 const move = validMoves.find(m => m.to === square);
-                if (move) makeMove(move);
+                
+                if (move) {
+                    makeMove(move);
+                }
             }
         }
         
         // Make a move
         function makeMove(move) {
-            if (isPlayerTurn) stopPlayerTimer();
-            else stopAITimer();
-
+            // Stop the current player's timer
+            if (game.turn() === 'w') stopWhiteTimer();
+            else stopBlackTimer();
+            
             game.move(move);
             selectedSquare = null;
             validMoves = [];
             updateBoard();
-
+            
+            // Check for game over
             if (game.isGameOver()) {
                 endGame();
                 return;
             }
-
-            isPlayerTurn = !isPlayerTurn;
-
-            if (isPlayerTurn) {
-                startPlayerTimer();
+            
+            // Switch turns and start the other player's timer
+            if (game.turn() === 'w') {
+                startWhiteTimer();
             } else {
-                startAITimer();
-                // Process AI move on the next animation frame for immediate response
-                requestAnimationFrame(makeAIMove);
+                startBlackTimer();
             }
         }
-
-        // Fast AI move logic
-        function makeAIMove() {
-            if (!gameActive || isPlayerTurn) return;
-
-            let move;
-            const moves = game.moves({verbose: true});
-            
-            if (moves.length === 0) return;
-
-            if (difficulty === 'easy') {
-                // Random moves (fastest)
-                move = moves[Math.floor(Math.random() * moves.length)].san;
-            } 
-            else if (difficulty === 'medium') {
-                // Prefer captures and safe moves
-                const captures = moves.filter(m => m.captured);
-                if (captures.length > 0) {
-                    // Prefer higher value captures
-                    captures.sort((a, b) => getPieceValue(b.captured) - getPieceValue(a.captured));
-                    move = captures[0].san;
-                } else {
-                    // Safe moves that don't immediately lose material
-                    const safeMoves = moves.filter(m => {
-                        const testGame = new Chess(game.fen());
-                        testGame.move(m);
-                        return !testGame.isCheckmate();
-                    });
-                    move = safeMoves.length > 0 
-                        ? safeMoves[Math.floor(Math.random() * safeMoves.length)].san
-                        : moves[Math.floor(Math.random() * moves.length)].san;
-                }
-            } 
-            else {
-                // Extreme: Quick minimax with depth 2
-                move = findBestMoveQuick(2);
-            }
-
-            if (move) makeMove(move);
-        }
-
-        // Optimized minimax for extreme difficulty
-        function findBestMoveQuick(depth) {
-            const moves = game.moves({verbose: true});
-            let bestMove = moves[0];
-            let bestValue = -Infinity;
-            
-            for (let i = 0; i < moves.length; i++) {
-                const testGame = new Chess(game.fen());
-                testGame.move(moves[i]);
-                
-                let value = quickEvaluate(testGame);
-                
-                if (depth > 0) {
-                    const opponentMoves = testGame.moves({verbose: true});
-                    let minOpponentValue = Infinity;
-                    
-                    // Only check top 3 opponent responses for speed
-                    for (let j = 0; j < Math.min(3, opponentMoves.length); j++) {
-                        const testGame2 = new Chess(testGame.fen());
-                        testGame2.move(opponentMoves[j]);
-                        const opponentValue = quickEvaluate(testGame2);
-                        minOpponentValue = Math.min(minOpponentValue, opponentValue);
-                    }
-                    
-                    value = minOpponentValue;
-                }
-                
-                if (value > bestValue) {
-                    bestValue = value;
-                    bestMove = moves[i];
-                }
-            }
-            
-            return bestMove.san;
-        }
-
-        // Quick board evaluation
-        function quickEvaluate(game) {
-            if (game.isCheckmate()) return game.turn() === 'w' ? -1000 : 1000;
-            if (game.isDraw()) return 0;
-            
-            let score = 0;
-            const pieceValues = {'p':1,'n':3,'b':3,'r':5,'q':9,'k':0};
-            const board = game.board();
-            
-            for (let i = 0; i < 8; i++) {
-                for (let j = 0; j < 8; j++) {
-                    const piece = board[i][j];
-                    if (piece) {
-                        score += piece.color === 'w' ? pieceValues[piece.type] : -pieceValues[piece.type];
-                    }
-                }
-            }
-            return score;
-        }
-
-        // Piece values
-        function getPieceValue(pieceType) {
-            return {'p':1,'n':3,'b':3,'r':5,'q':9,'k':0}[pieceType] || 0;
-        }
-
+        
         // Timer functions
-        function startPlayerTimer() {
-            stopPlayerTimer();
-            playerTimerInterval = setInterval(() => {
-                playerTime--;
+        function startWhiteTimer() {
+            stopBlackTimer();
+            whiteTimerInterval = setInterval(() => {
+                whiteTime--;
                 updateTimers();
-                if (playerTime <= 0) {
-                    stopPlayerTimer();
-                    endGame(false);
+                
+                if (whiteTime <= 0) {
+                    stopWhiteTimer();
+                    endGame(false); // Black wins (false = white didn't win)
                 }
-                if (playerTime <= 30) playerTimerElement.classList.add('low-time');
+                
+                if (whiteTime <= 30) {
+                    whiteTimerElement.classList.add('low-time');
+                }
             }, 1000);
         }
         
-        function stopPlayerTimer() {
-            if (playerTimerInterval) {
-                clearInterval(playerTimerInterval);
-                playerTimerInterval = null;
+        function stopWhiteTimer() {
+            if (whiteTimerInterval) {
+                clearInterval(whiteTimerInterval);
+                whiteTimerInterval = null;
             }
-            playerTimerElement.classList.remove('low-time');
+            whiteTimerElement.classList.remove('low-time');
         }
         
-        function startAITimer() {
-            stopAITimer();
-            aiTimerInterval = setInterval(() => {
-                aiTime--;
+        function startBlackTimer() {
+            stopWhiteTimer();
+            blackTimerInterval = setInterval(() => {
+                blackTime--;
                 updateTimers();
-                if (aiTime <= 0) {
-                    stopAITimer();
-                    endGame(true);
+                
+                if (blackTime <= 0) {
+                    stopBlackTimer();
+                    endGame(true); // White wins (true = white won)
                 }
             }, 1000);
         }
         
-        function stopAITimer() {
-            if (aiTimerInterval) {
-                clearInterval(aiTimerInterval);
-                aiTimerInterval = null;
+        function stopBlackTimer() {
+            if (blackTimerInterval) {
+                clearInterval(blackTimerInterval);
+                blackTimerInterval = null;
             }
         }
         
         function updateTimers() {
-            const playerMinutes = Math.floor(playerTime / 60);
-            const playerSeconds = playerTime % 60;
-            playerTimerElement.textContent = `${playerMinutes}:${playerSeconds.toString().padStart(2, '0')}`;
+            const whiteMinutes = Math.floor(whiteTime / 60);
+            const whiteSeconds = whiteTime % 60;
+            whiteTimerElement.textContent = `${whiteMinutes}:${whiteSeconds.toString().padStart(2, '0')}`;
             
-            const aiMinutes = Math.floor(aiTime / 60);
-            const aiSeconds = aiTime % 60;
-            aiTimerElement.textContent = `${aiMinutes}:${aiSeconds.toString().padStart(2, '0')}`;
+            const blackMinutes = Math.floor(blackTime / 60);
+            const blackSeconds = blackTime % 60;
+            blackTimerElement.textContent = `${blackMinutes}:${blackSeconds.toString().padStart(2, '0')}`;
         }
         
-        // Game control
+        // Game control functions
         function startGame() {
             game = new Chess();
             selectedSquare = null;
             validMoves = [];
-            playerTime = 5 * 60;
-            aiTime = 5 * 60;
-            isPlayerTurn = true;
+            whiteTime = 5 * 60;
+            blackTime = 5 * 60;
             gameActive = true;
             
+            // Show game elements
             menuScreen.style.display = 'none';
             boardContainer.style.display = 'block';
             timerContainer.style.display = 'flex';
+            currentTurnElement.style.display = 'block';
             
             updateTimers();
             initBoard();
-            startPlayerTimer();
+            startWhiteTimer(); // White starts first
         }
         
-        function endGame(playerWon = null) {
+        function endGame(whiteWon = null) {
             gameActive = false;
-            stopPlayerTimer();
-            stopAITimer();
+            stopWhiteTimer();
+            stopBlackTimer();
             
-            if (playerWon === null) {
+            if (whiteWon === null) {
+                // Game ended by checkmate or draw
                 if (game.isCheckmate()) {
-                    playerWon = game.turn() === 'b';
+                    whiteWon = game.turn() === 'b'; // If black's turn, white won
                 } else {
+                    // Draw
                     modalTitle.textContent = "Game Drawn";
                     modalMessage.textContent = "The game ended in a draw. Try again!";
                 }
             }
             
-            if (playerWon !== null) {
-                if (playerWon) {
-                    modalTitle.textContent = "Victory!";
-                    modalMessage.textContent = "🎉 You won and earned 520 ORANGES! 🍊";
+            if (whiteWon !== null) {
+                if (whiteWon) {
+                    modalTitle.textContent = "White Wins!";
+                    modalMessage.textContent = "🎉 White player wins! 🍊";
                 } else {
-                    modalTitle.textContent = "Game Over";
-                    modalMessage.textContent = "Time's up! Try again and claim those ORANGES!";
+                    modalTitle.textContent = "Black Wins!";
+                    modalMessage.textContent = "🎉 Black player wins! 🍊";
                 }
             }
             
             gameOverModal.classList.add('active');
         }
-
-        // Event listeners
-        difficultyButtons.forEach(btn => {
-            btn.addEventListener('click', () => {
-                difficultyButtons.forEach(b => b.classList.remove('active'));
-                btn.classList.add('active');
-                difficulty = btn.dataset.difficulty;
-            });
-        });
         
+        function returnToMenu() {
+            gameActive = false;
+            stopWhiteTimer();
+            stopBlackTimer();
+            
+            // Show menu elements
+            menuScreen.style.display = 'flex';
+            boardContainer.style.display = 'none';
+            timerContainer.style.display = 'none';
+            currentTurnElement.style.display = 'none';
+        }
+        
+        // Event listeners
         startBtn.addEventListener('click', startGame);
+        
         tryAgainBtn.addEventListener('click', () => {
             gameOverModal.classList.remove('active');
             startGame();
         });
         
         shareBtn.addEventListener('click', () => {
-            const text = modalTitle.textContent.includes("Victory") 
-                ? "I just won in siCHESS and earned 520 ORANGES! 🍊 #siCHESS"
-                : "siCHESS beat me, but I'll be back! 🍊 #siCHESS";
-            window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank');
+            let text;
+            if (modalTitle.textContent.includes("White")) {
+                text = "I just won as White in siCHESS Practice Mode! 🍊 #siCHESS";
+            } else if (modalTitle.textContent.includes("Black")) {
+                text = "I just won as Black in siCHESS Practice Mode! 🍊 #siCHESS";
+            } else {
+                text = "I played a draw in siCHESS Practice Mode! 🍊 #siCHESS";
+            }
+            
+            const url = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text);
+            window.open(url, '_blank');
         });
-
-        // Initialize with medium difficulty selected
-        document.querySelector('.difficulty-btn[data-difficulty="medium"]').classList.add('active');
     </script>
 </body>
 </html>
