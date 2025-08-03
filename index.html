@@ -42,6 +42,14 @@
             max-width: 800px;
         }
         
+        .menu-screen {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+        
         .difficulty-selector {
             display: flex;
             gap: 10px;
@@ -70,6 +78,24 @@
             box-shadow: 0 4px 8px rgba(255, 107, 0, 0.3);
         }
         
+        .start-btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(to right, var(--orange-med), var(--orange-dark));
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+            cursor: pointer;
+            box-shadow: 0 4px 12px rgba(255, 107, 0, 0.3);
+            transition: all 0.3s;
+        }
+        
+        .start-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(255, 107, 0, 0.4);
+        }
+        
         .board-container {
             position: relative;
             width: 100%;
@@ -78,6 +104,7 @@
             box-shadow: 0 10px 20px rgba(0,0,0,0.1);
             border-radius: 8px;
             overflow: hidden;
+            display: none;
         }
         
         #board {
@@ -141,6 +168,7 @@
             justify-content: space-between;
             width: 100%;
             max-width: 500px;
+            display: none;
         }
         
         .timer {
@@ -266,19 +294,23 @@
 </head>
 <body>
     <div class="game-container">
-        <h1>siCHESS �</h1>
+        <h1>siCHESS 🍊</h1>
         
-        <div class="difficulty-selector">
-            <button class="difficulty-btn" data-difficulty="easy">Easy</button>
-            <button class="difficulty-btn" data-difficulty="medium">Medium</button>
-            <button class="difficulty-btn" data-difficulty="extreme">Extreme</button>
+        <div class="menu-screen" id="menu-screen">
+            <h2>Select Difficulty</h2>
+            <div class="difficulty-selector">
+                <button class="difficulty-btn" data-difficulty="easy">Easy</button>
+                <button class="difficulty-btn" data-difficulty="medium">Medium</button>
+                <button class="difficulty-btn" data-difficulty="extreme">Extreme</button>
+            </div>
+            <button class="start-btn" id="start-btn">Start Game</button>
         </div>
         
-        <div class="board-container">
+        <div class="board-container" id="board-container">
             <div id="board"></div>
         </div>
         
-        <div class="timer-container">
+        <div class="timer-container" id="timer-container">
             <div class="timer" id="player-timer">5:00</div>
             <div class="timer" id="ai-timer">5:00</div>
         </div>
@@ -313,6 +345,10 @@
         const playerTimerElement = document.getElementById('player-timer');
         const aiTimerElement = document.getElementById('ai-timer');
         const difficultyButtons = document.querySelectorAll('.difficulty-btn');
+        const startBtn = document.getElementById('start-btn');
+        const menuScreen = document.getElementById('menu-screen');
+        const boardContainer = document.getElementById('board-container');
+        const timerContainer = document.getElementById('timer-container');
         const gameOverModal = document.getElementById('game-over-modal');
         const modalTitle = document.getElementById('modal-title');
         const modalMessage = document.getElementById('modal-message');
@@ -451,6 +487,13 @@
         
         // Make a move
         function makeMove(move) {
+            // Stop the current player's timer immediately when they make a move
+            if (isPlayerTurn) {
+                stopPlayerTimer();
+            } else {
+                stopAITimer();
+            }
+            
             game.move(move);
             selectedSquare = null;
             validMoves = [];
@@ -467,11 +510,11 @@
             
             if (isPlayerTurn) {
                 startPlayerTimer();
-                stopAITimer();
             } else {
-                startAITimer();
-                stopPlayerTimer();
-                setTimeout(makeAIMove, 500); // Small delay for better UX
+                setTimeout(() => {
+                    startAITimer();
+                    makeAIMove();
+                }, 500); // Small delay for better UX
             }
         }
         
@@ -532,7 +575,6 @@
                 // Switch back to player
                 isPlayerTurn = true;
                 startPlayerTimer();
-                stopAITimer();
             }
         }
         
@@ -717,6 +759,11 @@
             isPlayerTurn = true;
             gameActive = true;
             
+            // Show game elements
+            menuScreen.style.display = 'none';
+            boardContainer.style.display = 'block';
+            timerContainer.style.display = 'flex';
+            
             updateTimers();
             initBoard();
             startPlayerTimer();
@@ -739,7 +786,7 @@
             } else if (playerWon) {
                 // Player won on time
                 modalTitle.textContent = "Victory!";
-                modalMessage.textContent = "🎉 You won and earned 520 ORANGES! 🍊";
+                modalMessage.textContent = "🎉 You won and earned 520 ORANGES! �";
             } else {
                 // AI won on time
                 modalTitle.textContent = "Game Over";
@@ -751,6 +798,17 @@
             }
         }
         
+        function returnToMenu() {
+            gameActive = false;
+            stopPlayerTimer();
+            stopAITimer();
+            
+            // Show menu elements
+            menuScreen.style.display = 'flex';
+            boardContainer.style.display = 'none';
+            timerContainer.style.display = 'none';
+        }
+        
         // Event listeners
         difficultyButtons.forEach(btn => {
             btn.addEventListener('click', () => {
@@ -760,6 +818,8 @@
             });
         });
         
+        startBtn.addEventListener('click', startGame);
+        
         tryAgainBtn.addEventListener('click', () => {
             gameOverModal.classList.remove('active');
             startGame();
@@ -768,7 +828,7 @@
         shareBtn.addEventListener('click', () => {
             let text;
             if (modalTitle.textContent.includes("Victory")) {
-                text = "I just won in siCHESS and earned 520 ORANGES! 🍊 #siCHESS";
+                text = "I just won in siCHESS and earned 520 ORANGES! � #siCHESS";
             } else {
                 text = "siCHESS beat me, but I'll be back! 🍊 #siCHESS";
             }
@@ -777,9 +837,8 @@
             window.open(url, '_blank');
         });
         
-        // Start the game on medium difficulty by default
+        // Initialize with medium difficulty selected
         document.querySelector('.difficulty-btn[data-difficulty="medium"]').classList.add('active');
-        startGame();
     </script>
 </body>
 </html>
