@@ -155,6 +155,11 @@
             text-align: center;
         }
         
+        .active-timer {
+            box-shadow: 0 0 15px var(--orange-dark);
+            transform: scale(1.05);
+        }
+        
         .timer.low-time {
             animation: pulse 1s infinite;
         }
@@ -164,6 +169,30 @@
             font-weight: bold;
             color: var(--orange-dark);
             margin-bottom: 10px;
+            display: none;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        
+        .control-btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 20px;
+            background: linear-gradient(to right, var(--orange-light), var(--orange-med));
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(255, 140, 0, 0.2);
+            transition: all 0.2s;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(255, 140, 0, 0.3);
         }
         
         @keyframes pulse {
@@ -271,7 +300,7 @@
             <button class="start-btn" id="start-btn">Start Practice</button>
         </div>
         
-        <div class="current-turn" id="current-turn" style="display: none;">White's Turn</div>
+        <div class="current-turn" id="current-turn">White's Turn</div>
         
         <div class="board-container" id="board-container">
             <div id="board"></div>
@@ -280,6 +309,12 @@
         <div class="timer-container" id="timer-container">
             <div class="timer" id="white-timer">5:00</div>
             <div class="timer" id="black-timer">5:00</div>
+        </div>
+        
+        <div class="controls" id="controls" style="display: none;">
+            <button class="control-btn" id="resign-btn">Resign</button>
+            <button class="control-btn" id="draw-btn">Offer Draw</button>
+            <button class="control-btn" id="new-game-btn">New Game</button>
         </div>
     </div>
     
@@ -294,6 +329,19 @@
         </div>
     </div>
     
+    <div class="modal" id="promotion-modal">
+        <div class="modal-content">
+            <h2>Promote Pawn</h2>
+            <p>Choose a piece to promote to:</p>
+            <div class="modal-buttons">
+                <button class="modal-btn" data-piece="q">Queen</button>
+                <button class="modal-btn" data-piece="r">Rook</button>
+                <button class="modal-btn" data-piece="b">Bishop</button>
+                <button class="modal-btn" data-piece="n">Knight</button>
+            </div>
+        </div>
+    </div>
+    
     <script>
         // Game state
         let game = new Chess();
@@ -304,6 +352,7 @@
         let whiteTimerInterval = null;
         let blackTimerInterval = null;
         let gameActive = false;
+        let pendingPromotion = null;
         
         // DOM elements
         const boardElement = document.getElementById('board');
@@ -314,11 +363,17 @@
         const boardContainer = document.getElementById('board-container');
         const timerContainer = document.getElementById('timer-container');
         const currentTurnElement = document.getElementById('current-turn');
+        const controlsElement = document.getElementById('controls');
         const gameOverModal = document.getElementById('game-over-modal');
+        const promotionModal = document.getElementById('promotion-modal');
         const modalTitle = document.getElementById('modal-title');
         const modalMessage = document.getElementById('modal-message');
         const tryAgainBtn = document.getElementById('try-again-btn');
         const shareBtn = document.getElementById('share-btn');
+        const resignBtn = document.getElementById('resign-btn');
+        const drawBtn = document.getElementById('draw-btn');
+        const newGameBtn = document.getElementById('new-game-btn');
+        const promotionButtons = document.querySelectorAll('[data-piece]');
         
         // Initialize the board
         function initBoard() {
@@ -392,6 +447,17 @@
             
             // Update turn indicator
             currentTurnElement.textContent = game.turn() === 'w' ? "White's Turn" : "Black's Turn";
+            
+            // Highlight active timer
+            if (gameActive) {
+                if (game.turn() === 'w') {
+                    whiteTimerElement.classList.add('active-timer');
+                    blackTimerElement.classList.remove('active-timer');
+                } else {
+                    blackTimerElement.classList.add('active-timer');
+                    whiteTimerElement.classList.remove('active-timer');
+                }
+            }
         }
         
         // Handle square clicks
@@ -437,6 +503,12 @@
                 const move = validMoves.find(m => m.to === square);
                 
                 if (move) {
+                    // Check for pawn promotion
+                    if (move.flags.includes('p')) {
+                        pendingPromotion = move;
+                        promotionModal.classList.add('active');
+                        return;
+                    }
                     makeMove(move);
                 }
             }
@@ -454,16 +526,29 @@
             updateBoard();
             
             // Check for game over
+            checkGameOver();
+        }
+        
+        // Check game over conditions
+        function checkGameOver() {
             if (game.isGameOver()) {
-                endGame();
-                return;
-            }
-            
-            // Switch turns and start the other player's timer
-            if (game.turn() === 'w') {
-                startWhiteTimer();
-            } else {
-                startBlackTimer();
+                let winner = null;
+                let result = "";
+                
+                if (game.isCheckmate()) {
+                    winner = game.turn() === 'w' ? 'black' : 'white';
+                    result = `Checkmate - ${winner === 'white' ? 'White' : 'Black'} wins!`;
+                } 
+                else if (game.isDraw()) {
+                    if (game.isStalemate()) result = "Draw by stalemate";
+                    else if (game.isThreefoldRepetition()) result = "Draw by threefold repetition";
+                    else if (game.isInsufficientMaterial()) result = "Draw by insufficient material";
+                    else if (game.isDraw()) result = "Draw by 50-move rule";
+                }
+                
+                if (result) {
+                    endGame(winner, result);
+                }
             }
         }
         
@@ -476,7 +561,7 @@
                 
                 if (whiteTime <= 0) {
                     stopWhiteTimer();
-                    endGame(false); // Black wins (false = white didn't win)
+                    endGame('black', "White ran out of time - Black wins!");
                 }
                 
                 if (whiteTime <= 30) {
@@ -501,7 +586,11 @@
                 
                 if (blackTime <= 0) {
                     stopBlackTimer();
-                    endGame(true); // White wins (true = white won)
+                    endGame('white', "Black ran out of time - White wins!");
+                }
+                
+                if (blackTime <= 30) {
+                    blackTimerElement.classList.add('low-time');
                 }
             }, 1000);
         }
@@ -511,6 +600,7 @@
                 clearInterval(blackTimerInterval);
                 blackTimerInterval = null;
             }
+            blackTimerElement.classList.remove('low-time');
         }
         
         function updateTimers() {
@@ -537,60 +627,36 @@
             boardContainer.style.display = 'block';
             timerContainer.style.display = 'flex';
             currentTurnElement.style.display = 'block';
+            controlsElement.style.display = 'flex';
             
             updateTimers();
             initBoard();
             startWhiteTimer(); // White starts first
         }
         
-        function endGame(whiteWon = null) {
+        function endGame(winner, message) {
             gameActive = false;
             stopWhiteTimer();
             stopBlackTimer();
             
-            if (whiteWon === null) {
-                // Game ended by checkmate or draw
-                if (game.isCheckmate()) {
-                    whiteWon = game.turn() === 'b'; // If black's turn, white won
-                } else {
-                    // Draw
-                    modalTitle.textContent = "Game Drawn";
-                    modalMessage.textContent = "The game ended in a draw. Try again!";
-                }
-            }
-            
-            if (whiteWon !== null) {
-                if (whiteWon) {
-                    modalTitle.textContent = "White Wins!";
-                    modalMessage.textContent = "🎉 White player wins! 🍊";
-                } else {
-                    modalTitle.textContent = "Black Wins!";
-                    modalMessage.textContent = "🎉 Black player wins! 🍊";
-                }
-            }
+            modalTitle.textContent = winner ? 
+                `${winner === 'white' ? 'White' : 'Black'} Wins!` : 
+                "Game Drawn";
+            modalMessage.textContent = message || "The game has ended";
             
             gameOverModal.classList.add('active');
         }
         
-        function returnToMenu() {
-            gameActive = false;
-            stopWhiteTimer();
-            stopBlackTimer();
-            
-            // Show menu elements
-            menuScreen.style.display = 'flex';
-            boardContainer.style.display = 'none';
-            timerContainer.style.display = 'none';
-            currentTurnElement.style.display = 'none';
+        function resetGame() {
+            gameOverModal.classList.remove('active');
+            promotionModal.classList.remove('active');
+            startGame();
         }
         
         // Event listeners
         startBtn.addEventListener('click', startGame);
         
-        tryAgainBtn.addEventListener('click', () => {
-            gameOverModal.classList.remove('active');
-            startGame();
-        });
+        tryAgainBtn.addEventListener('click', resetGame);
         
         shareBtn.addEventListener('click', () => {
             let text;
@@ -604,6 +670,35 @@
             
             const url = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text);
             window.open(url, '_blank');
+        });
+        
+        resignBtn.addEventListener('click', () => {
+            if (gameActive) {
+                const winner = game.turn() === 'w' ? 'black' : 'white';
+                endGame(winner, `${winner === 'black' ? 'White' : 'Black'} resigned`);
+            }
+        });
+        
+        drawBtn.addEventListener('click', () => {
+            if (gameActive) {
+                endGame(null, "Draw by agreement");
+            }
+        });
+        
+        newGameBtn.addEventListener('click', resetGame);
+        
+        promotionButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                if (pendingPromotion) {
+                    const move = {
+                        ...pendingPromotion,
+                        promotion: btn.dataset.piece
+                    };
+                    promotionModal.classList.remove('active');
+                    makeMove(move);
+                    pendingPromotion = null;
+                }
+            });
         });
     </script>
 </body>
